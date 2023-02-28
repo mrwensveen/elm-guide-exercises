@@ -3,12 +3,11 @@ module Random_ exposing (..)
 import Browser
 import Html exposing (..)
 import Html.Events exposing (..)
-import Random
-import Task
+import Html.Attributes exposing (..)
 import Process
-import Html.Attributes exposing (disabled)
 import Random exposing (Generator)
-import Html.Attributes exposing (style)
+import Random.Extra
+import Task
 
 
 
@@ -29,15 +28,21 @@ main =
 -- MODEL
 
 
+type alias Die =
+  { face: Int
+  , bounces: Int
+  }
+
 type alias Model =
-  { dieFace : Int
+  { count: Int
+  , dice : List Die
   , buttonDisabled: Bool
   }
 
 
 init : () -> (Model, Cmd Msg)
 init _ =
-  ( Model 1 False
+  ( Model 5 (List.repeat 5 { face = 1, bounces = 0 }) False
   , Cmd.none
   )
 
@@ -48,43 +53,71 @@ init _ =
 
 type Msg
   = Click
-  | Roll Int
-  | NewFace Int
+  | SetCount (Maybe Int)
+  | SetBounces (List Int)
+  | Roll
+  | NewFaces (List Int)
 
-roll: Int -> Generator Int
-roll currentValue =
-  Random.int 1 6
-  |> Random.andThen
-    ( \value ->
-      if value /= currentValue then
-        Random.constant value
-      
-      else
-        roll currentValue
-    )
+roll: Die -> Generator Int
+roll die =
+  if die.bounces == 0 then
+    Random.constant die.face
+  else
+    Random.int 1 6
+    |> Random.andThen
+      ( \value ->
+        if value /= die.face then
+          Random.constant value
+        
+        else
+          roll die
+      )
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case msg of
-    Click ->
-      ( {model | buttonDisabled = True}
-      , Random.generate Roll (Random.int 0 100))
+    SetCount Nothing -> (model, Cmd.none)
 
-    Roll 0 ->
-      ( {model | buttonDisabled = False }
+    SetCount (Just count) ->
+      let
+        c = Basics.max 1 count
+      in
+      ( { model | count = c, dice = List.repeat c { face = 1, bounces = 0 }}
       , Cmd.none
       )
 
-    Roll reroll ->
-      ( model
-      , Cmd.batch
-        [ Task.perform (\_ -> Roll (reroll - 1)) (Process.sleep 100)
-        , Random.generate NewFace (roll model.dieFace)
-        ]
+    -- Generate the number of bounces to a random value
+    Click ->
+      ( {model | buttonDisabled = True}
+      , Random.generate SetBounces (Random.list model.count (Random.int 5 50))
       )
 
-    NewFace newFace ->
-      ( { model | dieFace = newFace }
+    -- Set the number of bounces and roll for the first time
+    SetBounces bounces ->
+      { model | dice = bounces |> List.map2 (\die b -> {die | bounces = b}) model.dice }
+      |> update Roll
+
+    -- Roll the dice if there are any that have bounces left      
+    Roll ->
+      let
+        totalBounces =
+          model.dice
+          |> List.map (\die -> die.bounces)
+          |> List.sum
+      in
+      case totalBounces of
+        0 ->
+          ({ model | buttonDisabled = False }, Cmd.none)
+        _ ->
+          ( model
+          , Cmd.batch
+            [ Task.perform (\_ -> Roll) (Process.sleep 100)
+            , Random.generate NewFaces (Random.Extra.sequence (model.dice |> List.map roll))
+            ]
+          )
+
+    NewFaces newFaces ->
+      ( { model | dice = newFaces |> List.map2 (\die f -> {die | face = f, bounces = (Basics.max 0 (die.bounces - 1)) }) model.dice }
         , Cmd.none
       )
 
@@ -104,7 +137,10 @@ subscriptions _ =
 
 view : Model -> Html Msg
 view model =
-  div [ style "padding" "1em" ]
-    [ h1 [] [ text (String.fromInt model.dieFace) ]
+  div [ style "padding" "1rem" ]
+    [ div [ style "margin-bottom" "1rem" ]
+        ( model.dice |> List.map (\die -> span [ style "padding" "0 1rem", style "font-size" "1.5rem"] [ text (String.fromInt die.face) ]) )
+    , input [ type_ "number", value (String.fromInt model.count), onInput (String.toInt >> SetCount) ] []
     , button [ onClick Click, disabled model.buttonDisabled ] [ text "Roll" ]
     ]
+

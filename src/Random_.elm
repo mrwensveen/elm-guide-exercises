@@ -139,7 +139,13 @@ view : Model -> Html Msg
 view model =
   div [ style "padding" "1rem" ]
     [ div [ style "margin-bottom" "1rem" ]
-        ( model.dice |> List.map (\die -> span [ style "padding" "0 1rem", style "font-size" "1.5rem"] [ text (String.fromInt die.face) ]) )
+        ( model.dice |> List.map (\die -> span
+          [ style "padding" "0 1rem"
+          , style "font-size" "5rem"
+          , style "font-family" "monospace"
+          , style "color" (if die.bounces == 0 then "black" else "lightgray")
+          ]
+          [ text (String.fromInt die.face) ]) )
     , input [ type_ "number", value (String.fromInt model.count), onInput (String.toInt >> SetCount) ] []
     , button [ onClick Click, disabled model.buttonDisabled ] [ text "Roll" ]
     ]

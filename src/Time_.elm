@@ -97,7 +97,7 @@ view model =
     [ p []
       [ span
         [ style "background-color" (if model.paused then "lightgrey" else "lightgreen")
-        , style "font-size" "64px"
+        , style "font-size" "5rem"
         , style "padding" "0 .5rem"
         ]
         [ text (pad hour ++ ":" ++ pad minute ++ ":" ++ pad second) ]
